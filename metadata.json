@@ -1,0 +1,5 @@
+{
+  "name": "Manager Control Tower",
+  "description": "A local-first initiative tracking dashboard for managers to oversee teams, priorities, and risks.",
+  "requestFramePermissions": []
+}
