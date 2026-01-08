@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { dbService } from '../services/db';
 import { Initiative, Status, Activity, Priority, Team, Person } from '../types';
 import { Card, PriorityBadge, StatusBadge, ProgressBar, RiskBadge, Button, Modal, Input, Select, TextArea } from '../components/ui';
-import { AlertCircle, Calendar, ArrowRight, Plus, ChevronDown, ChevronUp, Trash2 } from 'lucide-react';
+import { AlertCircle, Calendar, ArrowRight, Plus, ChevronDown, ChevronUp, Trash2, Filter } from 'lucide-react';
 import { TEAM_COLORS } from '../constants';
 
 const Dashboard = () => {
@@ -11,6 +11,7 @@ const Dashboard = () => {
   const [activities, setActivities] = useState<Activity[]>([]);
   const [loading, setLoading] = useState(true);
   const [showArchived, setShowArchived] = useState(false);
+  const [selectedTeamId, setSelectedTeamId] = useState<string>('all');
 
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -117,6 +118,7 @@ const Dashboard = () => {
 
   const visibleInitiatives = initiatives
     .filter(i => showArchived ? true : !i.archived)
+    .filter(i => selectedTeamId === 'all' || i.teamId === selectedTeamId)
     .sort((a, b) => {
         // Sort logic: Blocked > P0 > Overdue > EndDate
         if (a.status === Status.Blocked && b.status !== Status.Blocked) return -1;
@@ -170,7 +172,20 @@ const Dashboard = () => {
         <div className="lg:col-span-2 space-y-4">
           <div className="flex justify-between items-end">
             <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-200">Priority & Risk Watchlist</h2>
-            <Link to="/initiatives" className="text-sm text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 font-medium">View All</Link>
+            <div className="flex items-center gap-4">
+                <div className="flex items-center gap-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md px-2 py-1">
+                    <Filter className="w-3 h-3 text-slate-500" />
+                    <select 
+                        value={selectedTeamId} 
+                        onChange={(e) => setSelectedTeamId(e.target.value)}
+                        className="bg-transparent border-none text-xs text-slate-700 dark:text-slate-300 focus:ring-0 cursor-pointer py-0 pl-0 pr-6"
+                    >
+                        <option value="all">All Teams</option>
+                        {teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                    </select>
+                </div>
+                <Link to="/initiatives" className="text-sm text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 font-medium">View All</Link>
+            </div>
           </div>
           
           <div className="space-y-3">
@@ -186,7 +201,7 @@ const Dashboard = () => {
             ))}
             {visibleInitiatives.length === 0 && (
                 <div className="text-center py-10 text-slate-400 dark:text-slate-500 border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-xl">
-                    No active initiatives found.
+                    No active initiatives found for this filter.
                 </div>
             )}
           </div>
