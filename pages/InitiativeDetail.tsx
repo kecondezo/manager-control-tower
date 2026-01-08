@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { dbService } from '../services/db';
-import { Initiative, Activity, ActivityLog, Status, Priority, Person } from '../types';
+import { Initiative, Activity, ActivityLog, Status, Priority, Person, Team } from '../types';
 import { Button, StatusBadge, PriorityBadge, Card, ProgressBar, Modal, Input, Select, TextArea } from '../components/ui';
-import { ArrowLeft, Archive, Plus, Calendar, User, MessageSquare, Send, GripHorizontal, FileText, History, Trash2 } from 'lucide-react';
+import { ArrowLeft, Archive, Plus, Calendar, User, MessageSquare, Send, GripHorizontal, FileText, History, Trash2, Edit2 } from 'lucide-react';
 
 const InitiativeDetail = () => {
   const { id } = useParams<{ id: string }>();
@@ -11,11 +11,16 @@ const InitiativeDetail = () => {
   const [initiative, setInitiative] = useState<Initiative | null>(null);
   const [activities, setActivities] = useState<Activity[]>([]);
   const [people, setPeople] = useState<Person[]>([]);
+  const [teams, setTeams] = useState<Team[]>([]);
   
   // Modals & Data State
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'kanban' | 'list'>('kanban');
   
+  // Edit Initiative Modal State
+  const [isEditInitiativeModalOpen, setIsEditInitiativeModalOpen] = useState(false);
+  const [editInitiativeForm, setEditInitiativeForm] = useState<Partial<Initiative>>({});
+
   // Activity Modal State
   const [isActivityModalOpen, setIsActivityModalOpen] = useState(false);
   const [selectedActivity, setSelectedActivity] = useState<Activity | null>(null); 
@@ -39,15 +44,17 @@ const InitiativeDetail = () => {
 
   const refreshData = async () => {
     if (!id) return;
-    const [init, acts, ppl] = await Promise.all([
+    const [init, acts, ppl, tms] = await Promise.all([
         dbService.getInitiative(id),
         dbService.getActivities(id),
-        dbService.getPeople()
+        dbService.getPeople(),
+        dbService.getTeams()
     ]);
 
     setInitiative(init || null);
     setActivities(acts.filter(a => !a.archived));
     setPeople(ppl);
+    setTeams(tms);
     setLoading(false);
   };
 
@@ -56,6 +63,36 @@ const InitiativeDetail = () => {
   }, [id]);
 
   // --- Handlers ---
+
+  const handleOpenEditInitiative = () => {
+      if (!initiative) return;
+      setEditInitiativeForm({
+          title: initiative.title,
+          description: initiative.description,
+          priority: initiative.priority,
+          ownerId: initiative.ownerId,
+          startDate: initiative.startDate,
+          endDate: initiative.endDate,
+          teamId: initiative.teamId,
+          status: initiative.status
+      });
+      setIsEditInitiativeModalOpen(true);
+  };
+
+  const handleUpdateInitiative = async (e: React.FormEvent) => {
+      e.preventDefault();
+      if (!initiative) return;
+
+      const updatedInitiative = {
+          ...initiative,
+          ...editInitiativeForm,
+          updatedAt: new Date().toISOString()
+      };
+
+      await dbService.saveInitiative(updatedInitiative);
+      setInitiative(updatedInitiative);
+      setIsEditInitiativeModalOpen(false);
+  };
 
   const handleUpdateInitiativeStatus = async (newStatus: Status) => {
       if (!initiative) return;
@@ -206,7 +243,7 @@ const InitiativeDetail = () => {
       </div>
 
       {/* Initiative Header */}
-      <Card className="p-6">
+      <Card className="p-6 relative group">
         <div className="flex flex-col md:flex-row justify-between items-start gap-4">
             <div className="space-y-2 flex-1">
                 <div className="flex flex-wrap items-center gap-3">
@@ -236,12 +273,22 @@ const InitiativeDetail = () => {
                     </div>
                 </div>
             </div>
-            <div className="w-full md:w-64 space-y-2">
-                <div className="flex justify-between text-sm font-medium text-slate-700 dark:text-slate-300">
-                    <span>Progress</span>
-                    <span>{initiative.progress}%</span>
+            <div className="w-full md:w-64 space-y-2 flex flex-col items-end">
+                <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    className="mb-2 opacity-0 group-hover:opacity-100 transition-opacity"
+                    onClick={handleOpenEditInitiative}
+                >
+                    <Edit2 className="w-4 h-4 mr-1" /> Edit
+                </Button>
+                <div className="w-full">
+                    <div className="flex justify-between text-sm font-medium text-slate-700 dark:text-slate-300">
+                        <span>Progress</span>
+                        <span>{initiative.progress}%</span>
+                    </div>
+                    <ProgressBar progress={initiative.progress} />
                 </div>
-                <ProgressBar progress={initiative.progress} />
             </div>
         </div>
       </Card>
@@ -331,6 +378,76 @@ const InitiativeDetail = () => {
             </table>
         </Card>
       )}
+
+      {/* === EDIT INITIATIVE MODAL === */}
+      <Modal isOpen={isEditInitiativeModalOpen} onClose={() => setIsEditInitiativeModalOpen(false)} title="Edit Initiative">
+          <form onSubmit={handleUpdateInitiative} className="space-y-4">
+              <Input 
+                  label="Title" 
+                  value={editInitiativeForm.title || ''} 
+                  onChange={e => setEditInitiativeForm({...editInitiativeForm, title: e.target.value})} 
+                  required
+              />
+              <TextArea 
+                  label="Description" 
+                  value={editInitiativeForm.description || ''} 
+                  onChange={e => setEditInitiativeForm({...editInitiativeForm, description: e.target.value})} 
+                  rows={3}
+              />
+              <div className="grid grid-cols-2 gap-4">
+                  <Select 
+                      label="Team" 
+                      value={editInitiativeForm.teamId || ''} 
+                      onChange={e => setEditInitiativeForm({...editInitiativeForm, teamId: e.target.value})}
+                      required
+                  >
+                      {teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                  </Select>
+                  <Select 
+                      label="Owner" 
+                      value={editInitiativeForm.ownerId || ''} 
+                      onChange={e => setEditInitiativeForm({...editInitiativeForm, ownerId: e.target.value})}
+                      required
+                  >
+                      {people.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                  </Select>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                  <Select 
+                      label="Priority" 
+                      value={editInitiativeForm.priority || Priority.P2} 
+                      onChange={e => setEditInitiativeForm({...editInitiativeForm, priority: e.target.value as Priority})}
+                  >
+                      {Object.values(Priority).map(p => <option key={p} value={p}>{p}</option>)}
+                  </Select>
+                  <Select 
+                      label="Status" 
+                      value={editInitiativeForm.status || Status.NotStarted} 
+                      onChange={e => setEditInitiativeForm({...editInitiativeForm, status: e.target.value as Status})}
+                  >
+                      {Object.values(Status).map(s => <option key={s} value={s}>{s}</option>)}
+                  </Select>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                  <Input 
+                      type="date"
+                      label="Start Date" 
+                      value={editInitiativeForm.startDate || ''} 
+                      onChange={e => setEditInitiativeForm({...editInitiativeForm, startDate: e.target.value})}
+                  />
+                  <Input 
+                      type="date"
+                      label="End Date" 
+                      value={editInitiativeForm.endDate || ''} 
+                      onChange={e => setEditInitiativeForm({...editInitiativeForm, endDate: e.target.value})}
+                  />
+              </div>
+              <div className="flex justify-end gap-2 pt-2">
+                  <Button variant="secondary" onClick={() => setIsEditInitiativeModalOpen(false)}>Cancel</Button>
+                  <Button type="submit">Save Changes</Button>
+              </div>
+          </form>
+      </Modal>
 
       {/* === CREATE ACTIVITY MODAL === */}
       <Modal isOpen={isActivityModalOpen} onClose={() => setIsActivityModalOpen(false)} title="New Activity">
