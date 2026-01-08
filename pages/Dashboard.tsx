@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { dbService } from '../services/db';
 import { Initiative, Status, Activity, Priority, Team, Person } from '../types';
 import { Card, PriorityBadge, StatusBadge, ProgressBar, RiskBadge, Button, Modal, Input, Select, TextArea } from '../components/ui';
-import { AlertCircle, Calendar, ArrowRight, Plus, ChevronDown, ChevronUp, Trash2, Filter } from 'lucide-react';
+import { AlertCircle, Calendar, ArrowRight, Plus, ChevronDown, ChevronUp, Trash2, Filter, User, ArrowUpDown } from 'lucide-react';
 import { TEAM_COLORS } from '../constants';
 
 const Dashboard = () => {
@@ -12,6 +12,10 @@ const Dashboard = () => {
   const [loading, setLoading] = useState(true);
   const [showArchived, setShowArchived] = useState(false);
   const [selectedTeamId, setSelectedTeamId] = useState<string>('all');
+  
+  // Activity Filter State
+  const [activityOwnerId, setActivityOwnerId] = useState<string>('me');
+  const [activitySort, setActivitySort] = useState<'priority' | 'startDate' | 'endDate'>('endDate');
 
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -128,9 +132,18 @@ const Dashboard = () => {
         return new Date(a.endDate || '').getTime() - new Date(b.endDate || '').getTime();
   });
 
-  const myActivities = activities
-    .filter(a => a.ownerId === 'me' && a.status !== Status.Done && !a.archived)
-    .sort((a, b) => new Date(a.endDate || '').getTime() - new Date(b.endDate || '').getTime());
+  const filteredActivities = activities
+    .filter(a => (activityOwnerId === 'all' || a.ownerId === activityOwnerId) && a.status !== Status.Done && !a.archived)
+    .sort((a, b) => {
+        if (activitySort === 'priority') {
+            return a.priority.localeCompare(b.priority);
+        } else if (activitySort === 'startDate') {
+            return new Date(a.startDate || '9999-12-31').getTime() - new Date(b.startDate || '9999-12-31').getTime();
+        } else {
+            // endDate
+            return new Date(a.endDate || '9999-12-31').getTime() - new Date(b.endDate || '9999-12-31').getTime();
+        }
+    });
 
   if (loading) return <div className="p-8 text-slate-500 dark:text-slate-400">Loading dashboard...</div>;
 
@@ -209,9 +222,41 @@ const Dashboard = () => {
 
         {/* Sidebar: My Actions */}
         <div className="space-y-4">
-          <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-200">My Next Actions</h2>
+          <div className="flex flex-col gap-2">
+              <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-200">
+                {activityOwnerId === 'me' ? 'My' : 'Team'} Next Actions
+              </h2>
+              <div className="flex gap-2">
+                 {/* Owner Filter */}
+                 <div className="flex-1 flex items-center gap-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md px-2 py-1">
+                    <User className="w-3 h-3 text-slate-500" />
+                    <select 
+                        value={activityOwnerId} 
+                        onChange={(e) => setActivityOwnerId(e.target.value)}
+                        className="w-full bg-transparent border-none text-xs text-slate-700 dark:text-slate-300 focus:ring-0 cursor-pointer py-0 pl-0"
+                    >
+                        <option value="me">Me</option>
+                        <option value="all">All</option>
+                        {people.filter(p => p.id !== 'me').map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                    </select>
+                 </div>
+                 {/* Sort */}
+                 <div className="flex-1 flex items-center gap-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md px-2 py-1">
+                    <ArrowUpDown className="w-3 h-3 text-slate-500" />
+                    <select 
+                        value={activitySort} 
+                        onChange={(e) => setActivitySort(e.target.value as any)}
+                        className="w-full bg-transparent border-none text-xs text-slate-700 dark:text-slate-300 focus:ring-0 cursor-pointer py-0 pl-0"
+                    >
+                        <option value="endDate">Due Date</option>
+                        <option value="startDate">Start Date</option>
+                        <option value="priority">Priority</option>
+                    </select>
+                 </div>
+              </div>
+          </div>
           <Card className="divide-y divide-slate-100 dark:divide-slate-700">
-            {myActivities.length > 0 ? myActivities.map(activity => (
+            {filteredActivities.length > 0 ? filteredActivities.map(activity => (
               <div key={activity.id} className="p-3 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors">
                  <div className="flex justify-between items-start mb-1">
                     <span className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase">{activity.priority}</span>
@@ -222,7 +267,10 @@ const Dashboard = () => {
                  <Link to={`/initiatives/${activity.initiativeId}`} className="block font-medium text-slate-800 dark:text-slate-200 text-sm mb-1 hover:text-indigo-600 dark:hover:text-indigo-400">
                     {activity.title}
                  </Link>
-                 <StatusBadge status={activity.status} />
+                 <div className="flex justify-between items-center">
+                    <StatusBadge status={activity.status} />
+                    {activityOwnerId === 'all' && <span className="text-xs text-slate-400">{activity.ownerId}</span>}
+                 </div>
               </div>
             )) : (
                 <div className="p-6 text-center text-sm text-slate-400 dark:text-slate-500">
