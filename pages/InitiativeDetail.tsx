@@ -285,9 +285,17 @@ const InitiativeDetail = () => {
                 <div className="w-full">
                     <div className="flex justify-between text-sm font-medium text-slate-700 dark:text-slate-300">
                         <span>Progress</span>
-                        <span>{initiative.progress}%</span>
+                        <span>{(() => {
+                            if (activities.length === 0) return 0;
+                            const doneActivities = activities.filter(a => a.status === Status.Done);
+                            return Math.round((doneActivities.length / activities.length) * 100);
+                        })()}%</span>
                     </div>
-                    <ProgressBar progress={initiative.progress} />
+                    <ProgressBar progress={(() => {
+                        if (activities.length === 0) return 0;
+                        const doneActivities = activities.filter(a => a.status === Status.Done);
+                        return Math.round((doneActivities.length / activities.length) * 100);
+                    })()} />
                 </div>
             </div>
         </div>
@@ -584,6 +592,16 @@ const InitiativeDetail = () => {
                                     onChange={e => setSelectedActivity({...selectedActivity, priority: e.target.value as Priority})}
                                 >
                                     {Object.values(Priority).map(p => <option key={p} value={p}>{p}</option>)}
+                                </Select>
+                           </div>
+                           <div className="grid grid-cols-2 gap-4">
+                                <Select 
+                                    label="Owner" 
+                                    value={selectedActivity.ownerId} 
+                                    onChange={e => setSelectedActivity({...selectedActivity, ownerId: e.target.value})}
+                                    required
+                                >
+                                    {people.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                                 </Select>
                            </div>
                            <div className="grid grid-cols-2 gap-4">

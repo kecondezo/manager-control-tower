@@ -205,7 +205,15 @@ const Dashboard = () => {
             {visibleInitiatives.map(initiative => (
                 <InitiativeRow 
                     key={initiative.id} 
-                    initiative={initiative}
+                    initiative={{
+                        ...initiative,
+                        progress: (() => {
+                            const initActivities = activities.filter(a => a.initiativeId === initiative.id && !a.archived);
+                            if (initActivities.length === 0) return 0;
+                            const doneActivities = initActivities.filter(a => a.status === Status.Done);
+                            return Math.round((doneActivities.length / initActivities.length) * 100);
+                        })()
+                    }}
                     activities={activities.filter(a => a.initiativeId === initiative.id && (showArchived ? true : !a.archived))}
                     showArchived={showArchived}
                     onArchive={() => handleArchiveInitiative(initiative.id)}
