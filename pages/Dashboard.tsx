@@ -3,8 +3,9 @@ import { Link } from 'react-router-dom';
 import { dbService } from '../services/db';
 import { Initiative, Status, Activity, Priority, Team, Person } from '../types';
 import { Card, PriorityBadge, StatusBadge, ProgressBar, RiskBadge, Button, Modal, Input, Select, TextArea } from '../components/ui';
-import { AlertCircle, Calendar, ArrowRight, Plus, ChevronDown, ChevronUp, Trash2, Filter, User, ArrowUpDown } from 'lucide-react';
+import { AlertCircle, Calendar, ArrowRight, Plus, ChevronDown, ChevronUp, Trash2, Filter, User, ArrowUpDown, Download } from 'lucide-react';
 import { TEAM_COLORS } from '../constants';
+import { exportExecutiveSummary } from '../services/pdfExport';
 
 const Dashboard = () => {
   const [initiatives, setInitiatives] = useState<Initiative[]>([]);
@@ -145,6 +146,19 @@ const Dashboard = () => {
         }
     });
 
+  const handleDownloadReport = async () => {
+    // We use visibleInitiatives because they are already filtered by the dashboard's current state (Team, Archived, etc.)
+    // We also need to ensure we pass the correct progress for each initiative
+    const initiativesWithProgress = visibleInitiatives.map(initiative => {
+        const initActivities = activities.filter(a => a.initiativeId === initiative.id && !a.archived);
+        const progress = initActivities.length === 0 ? 0 : 
+            Math.round((initActivities.filter(a => a.status === Status.Done).length / initActivities.length) * 100);
+        return { ...initiative, progress };
+    });
+
+    await exportExecutiveSummary(initiativesWithProgress, activities, teams, people);
+  };
+
   if (loading) return <div className="p-8 text-slate-500 dark:text-slate-400">Loading dashboard...</div>;
 
   return (
@@ -165,6 +179,10 @@ const Dashboard = () => {
                  />
                  Show Archived
              </label>
+            <Button variant="secondary" size="md" onClick={handleDownloadReport}>
+                <Download className="w-4 h-4 mr-2" />
+                Resumen Ejecutivo
+            </Button>
             <Button size="md" onClick={() => setIsModalOpen(true)}>
                 <Plus className="w-4 h-4 mr-2" />
                 New Initiative
