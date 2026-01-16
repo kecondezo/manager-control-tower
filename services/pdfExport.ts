@@ -59,25 +59,49 @@ export const exportExecutiveSummary = async (
       
       const isDone = activity.status === Status.Done;
       const isInProgress = activity.status === Status.InProgress;
+      const isBlocked = activity.status === Status.Blocked;
       
-      const recentLogs = logs.filter(log => {
-        const logDate = new Date(log.createdAt);
-        if (isDone) return logDate >= last24h;
-        if (isInProgress) return logDate >= last48h;
-        return false;
-      });
+      let logsToShow: ActivityLog[] = [];
+      let statusText = '';
+      let statusColor: [number, number, number] = [0, 0, 0];
 
-      if (recentLogs.length > 0) {
-        const statusText = isDone ? 'Terminado' : 'En progreso';
-        const color = [0, 128, 0]; // Verde
+      if (isDone) {
+        logsToShow = logs.filter(log => new Date(log.createdAt) >= last24h);
+        statusText = 'Terminado';
+        statusColor = [0, 128, 0]; // Verde
+      } else if (isInProgress) {
+        logsToShow = logs.filter(log => new Date(log.createdAt) >= last48h);
+        if (logsToShow.length === 0 && logs.length > 0) {
+          // Si no hay en las últimas 48h, mostrar el último
+          const sortedLogs = [...logs].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+          logsToShow = [sortedLogs[0]];
+        } else if (logsToShow.length === 0 && logs.length === 0) {
+          // Si no hay comentarios del todo, aún mostramos la tarea en progreso según requerimiento
+          logsToShow = [{ id: '', activityId: activity.id, createdAt: '', authorId: '', message: 'Sin comentarios' }];
+        }
+        statusText = 'En progreso';
+        statusColor = [218, 165, 32]; // Amarillo (Goldenrod)
+      } else if (isBlocked) {
+        if (logs.length > 0) {
+          const sortedLogs = [...logs].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+          logsToShow = [sortedLogs[0]];
+        } else {
+          logsToShow = [{ id: '', activityId: activity.id, createdAt: '', authorId: '', message: 'Sin comentarios' }];
+        }
+        statusText = 'Bloqueado';
+        statusColor = [220, 38, 38]; // Rojo
+      }
 
-        recentLogs.forEach(log => {
-          relevantActivitiesData.push([
-            activity.title,
-            statusText,
-            log.message,
-            new Date(log.createdAt).toLocaleString()
-          ]);
+      if (logsToShow.length > 0) {
+        logsToShow.forEach(log => {
+          relevantActivitiesData.push({
+            title: activity.title,
+            status: statusText,
+            comment: log.message,
+            dateStatus: log.createdAt ? new Date(log.createdAt).toLocaleString() : 'N/A',
+            dateEnd: activity.endDate ? new Date(activity.endDate).toLocaleDateString() : 'N/A',
+            color: statusColor
+          });
         });
       }
     }
@@ -85,16 +109,17 @@ export const exportExecutiveSummary = async (
     if (relevantActivitiesData.length > 0) {
       autoTable(doc, {
         startY: currentY,
-        head: [['Actividad', 'Estado', 'Comentario', 'Fecha']],
-        body: relevantActivitiesData,
+        head: [['Actividad', 'Estado', 'Comentario', 'Fecha Estado', 'Fecha Fin']],
+        body: relevantActivitiesData.map(d => [d.title, d.status, d.comment, d.dateStatus, d.dateEnd]),
         theme: 'striped',
         headStyles: { fillColor: [79, 70, 229] },
         columnStyles: {
-          1: { fontStyle: 'bold' } // We'll handle color in didParseCell or bodyStyles if needed, but let's try didParseCell
+          1: { fontStyle: 'bold' }
         },
         didParseCell: (data) => {
           if (data.section === 'body' && data.column.index === 1) {
-            data.cell.styles.textColor = [0, 128, 0]; // Green
+            const rowIndex = data.row.index;
+            data.cell.styles.textColor = relevantActivitiesData[rowIndex].color;
           }
         },
         didDrawPage: (data) => {
@@ -105,7 +130,7 @@ export const exportExecutiveSummary = async (
     } else {
       doc.setFontSize(9);
       doc.setTextColor(150, 150, 150);
-      doc.text('No hay actualizaciones recientes en las últimas 24/48h para actividades terminadas/en progreso.', 14, currentY);
+      doc.text('No hay actualizaciones recientes o tareas relevantes para mostrar.', 14, currentY);
       currentY += 15;
     }
   }
