@@ -23,6 +23,7 @@ export interface Person {
   id: string;
   name: string;
   avatar?: string;
+  teamIds?: string[];
 }
 
 export interface ActivityLog {
@@ -54,6 +55,7 @@ export interface Initiative {
   description: string;
   teamId: string;
   ownerId: string;
+  platformId?: string;
   priority: Priority;
   status: Status;
   progress: number;
@@ -65,11 +67,28 @@ export interface Initiative {
   archived: boolean;
 }
 
+export interface Platform {
+  id: string;
+  name: string;
+}
+
 export interface DatabaseSchema {
   meta: { version: number; updatedAt: string };
   teams: Team[];
   people: Person[];
+  platforms: Platform[];
   initiatives: Initiative[];
   activities: Activity[];
   activityLogs: ActivityLog[];
+  capacityAssignments: CapacityAssignment[];
+}
+
+export interface CapacityAssignment {
+  id: string;
+  personId: string;
+  initiativeId: string;
+  year: number;
+  month: number; // 1-12
+  percentage: number;
+  updatedAt: string;
 }

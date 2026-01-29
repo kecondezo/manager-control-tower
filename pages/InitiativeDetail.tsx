@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { dbService } from '../services/db';
-import { Initiative, Activity, ActivityLog, Status, Priority, Person, Team } from '../types';
+import { Initiative, Activity, ActivityLog, Status, Priority, Person, Team, Platform } from '../types';
 import { Button, StatusBadge, PriorityBadge, Card, ProgressBar, Modal, Input, Select, TextArea } from '../components/ui';
 import { ArrowLeft, Archive, Plus, Calendar, User, MessageSquare, Send, GripHorizontal, FileText, History, Trash2, Edit2 } from 'lucide-react';
 
@@ -12,6 +12,7 @@ const InitiativeDetail = () => {
   const [activities, setActivities] = useState<Activity[]>([]);
   const [people, setPeople] = useState<Person[]>([]);
   const [teams, setTeams] = useState<Team[]>([]);
+  const [platforms, setPlatforms] = useState<Platform[]>([]);
   
   // Modals & Data State
   const [loading, setLoading] = useState(true);
@@ -44,17 +45,19 @@ const InitiativeDetail = () => {
 
   const refreshData = async () => {
     if (!id) return;
-    const [init, acts, ppl, tms] = await Promise.all([
+    const [init, acts, ppl, tms, plts] = await Promise.all([
         dbService.getInitiative(id),
         dbService.getActivities(id),
         dbService.getPeople(),
-        dbService.getTeams()
+        dbService.getTeams(),
+        dbService.getPlatforms()
     ]);
 
     setInitiative(init || null);
     setActivities(acts.filter(a => !a.archived));
     setPeople(ppl);
     setTeams(tms);
+    setPlatforms(plts);
     setLoading(false);
   };
 
@@ -71,6 +74,7 @@ const InitiativeDetail = () => {
           description: initiative.description,
           priority: initiative.priority,
           ownerId: initiative.ownerId,
+          platformId: initiative.platformId,
           startDate: initiative.startDate,
           endDate: initiative.endDate,
           teamId: initiative.teamId,
@@ -125,6 +129,16 @@ const InitiativeDetail = () => {
       };
 
       await dbService.saveActivity(newActivity);
+
+      // Log creation
+      await dbService.addLog({
+          id: crypto.randomUUID(),
+          activityId: newActivity.id,
+          createdAt: new Date().toISOString(),
+          authorId: 'me',
+          message: `Actividad creada: ${newActivity.title}. Prioridad: ${newActivity.priority}. Estado: ${newActivity.status}.`
+      });
+
       setIsActivityModalOpen(false);
       setActivityForm({ title: '', description: '', priority: Priority.P2, status: Status.NotStarted, startDate: '', endDate: '', ownerId: 'me' });
       refreshData();
@@ -145,12 +159,24 @@ const InitiativeDetail = () => {
       const activity = activities.find(a => a.id === activityId);
       if (!activity) return;
 
+      const oldStatus = activity.status;
+      if (oldStatus === newStatus) return;
+
       const updated = { ...activity, status: newStatus };
       
       // Optimistic Update
       setActivities(prev => prev.map(a => a.id === activityId ? updated : a));
       
       await dbService.saveActivity(updated);
+
+      // Log status change
+      await dbService.addLog({
+          id: crypto.randomUUID(),
+          activityId: activity.id,
+          createdAt: new Date().toISOString(),
+          authorId: 'me',
+          message: `Cambio de estado: de ${oldStatus} a ${newStatus}`
+      });
   };
 
   // --- Drag and Drop Handlers ---
@@ -209,9 +235,48 @@ const InitiativeDetail = () => {
   const handleUpdateActivityDetails = async (e: React.FormEvent) => {
       e.preventDefault();
       if (!selectedActivity) return;
+
+      const originalActivity = activities.find(a => a.id === selectedActivity.id);
+      if (originalActivity) {
+          // Check for date changes
+          if (originalActivity.startDate !== selectedActivity.startDate) {
+              await dbService.addLog({
+                  id: crypto.randomUUID(),
+                  activityId: selectedActivity.id,
+                  createdAt: new Date().toISOString(),
+                  authorId: 'me',
+                  message: `Fecha de inicio modificada: de ${originalActivity.startDate || 'TBD'} a ${selectedActivity.startDate || 'TBD'}`
+              });
+          }
+          if (originalActivity.endDate !== selectedActivity.endDate) {
+              await dbService.addLog({
+                  id: crypto.randomUUID(),
+                  activityId: selectedActivity.id,
+                  createdAt: new Date().toISOString(),
+                  authorId: 'me',
+                  message: `Fecha de fin modificada: de ${originalActivity.endDate || 'TBD'} a ${selectedActivity.endDate || 'TBD'}`
+              });
+          }
+          // Check for status changes in details modal
+          if (originalActivity.status !== selectedActivity.status) {
+              await dbService.addLog({
+                  id: crypto.randomUUID(),
+                  activityId: selectedActivity.id,
+                  createdAt: new Date().toISOString(),
+                  authorId: 'me',
+                  message: `Cambio de estado: de ${originalActivity.status} a ${selectedActivity.status}`
+              });
+          }
+      }
+
       await dbService.saveActivity(selectedActivity);
       // Refresh list to show new details
       setActivities(prev => prev.map(a => a.id === selectedActivity.id ? selectedActivity : a));
+      
+      // Refresh logs if we are in the log tab
+      const updatedLogs = await dbService.getLogs(selectedActivity.id);
+      setSelectedActivityLogs(updatedLogs);
+
       alert('Activity updated');
   };
 
@@ -248,6 +313,11 @@ const InitiativeDetail = () => {
             <div className="space-y-2 flex-1">
                 <div className="flex flex-wrap items-center gap-3">
                     <h1 className="text-3xl font-bold text-slate-900 dark:text-white">{initiative.title}</h1>
+                    {initiative.platformId && (
+                        <span className="bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 px-2 py-1 rounded text-sm font-medium border border-slate-200 dark:border-slate-600">
+                            {platforms.find(p => p.id === initiative.platformId)?.name}
+                        </span>
+                    )}
                     <PriorityBadge priority={initiative.priority} />
                     
                     {/* Editable Status for Initiative */}
@@ -412,6 +482,16 @@ const InitiativeDetail = () => {
                       {teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
                   </Select>
                   <Select 
+                      label="Platform" 
+                      value={editInitiativeForm.platformId || ''} 
+                      onChange={e => setEditInitiativeForm({...editInitiativeForm, platformId: e.target.value})}
+                  >
+                      <option value="">Select Platform</option>
+                      {platforms.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                  </Select>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                  <Select 
                       label="Owner" 
                       value={editInitiativeForm.ownerId || ''} 
                       onChange={e => setEditInitiativeForm({...editInitiativeForm, ownerId: e.target.value})}
@@ -419,8 +499,6 @@ const InitiativeDetail = () => {
                   >
                       {people.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                   </Select>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
                   <Select 
                       label="Priority" 
                       value={editInitiativeForm.priority || Priority.P2} 
@@ -428,6 +506,8 @@ const InitiativeDetail = () => {
                   >
                       {Object.values(Priority).map(p => <option key={p} value={p}>{p}</option>)}
                   </Select>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
                   <Select 
                       label="Status" 
                       value={editInitiativeForm.status || Status.NotStarted} 

@@ -4,6 +4,7 @@ import { Layout } from './components/Layout';
 import Dashboard from './pages/Dashboard';
 import InitiativesList from './pages/InitiativesList';
 import InitiativeDetail from './pages/InitiativeDetail';
+import CapacityPlanning from './pages/CapacityPlanning';
 import Settings from './pages/Settings';
 
 const App: React.FC = () => {
@@ -24,6 +25,7 @@ const App: React.FC = () => {
           <Route path="/" element={<Dashboard />} />
           <Route path="/initiatives" element={<InitiativesList />} />
           <Route path="/initiatives/:id" element={<InitiativeDetail />} />
+          <Route path="/capacity" element={<CapacityPlanning />} />
           <Route path="/settings" element={<Settings />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

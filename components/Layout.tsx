@@ -1,6 +1,6 @@
 import React from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
-import { LayoutDashboard, ListTodo, Settings, Activity } from 'lucide-react';
+import { LayoutDashboard, ListTodo, Settings, Activity, Users } from 'lucide-react';
 
 export const Layout: React.FC<{ children?: React.ReactNode }> = ({ children }) => {
   const location = useLocation();
@@ -8,6 +8,7 @@ export const Layout: React.FC<{ children?: React.ReactNode }> = ({ children }) =
   const navItems = [
     { icon: LayoutDashboard, label: 'Control Tower', path: '/' },
     { icon: ListTodo, label: 'Initiatives', path: '/initiatives' },
+    { icon: Users, label: 'Capacity', path: '/capacity' },
     { icon: Settings, label: 'Settings', path: '/settings' },
   ];
 

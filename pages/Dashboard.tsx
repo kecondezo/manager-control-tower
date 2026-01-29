@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { dbService } from '../services/db';
-import { Initiative, Status, Activity, Priority, Team, Person } from '../types';
+import { Initiative, Status, Activity, Priority, Team, Person, Platform } from '../types';
 import { Card, PriorityBadge, StatusBadge, ProgressBar, RiskBadge, Button, Modal, Input, Select, TextArea } from '../components/ui';
 import { AlertCircle, Calendar, ArrowRight, Plus, ChevronDown, ChevronUp, Trash2, Filter, User, ArrowUpDown, Download } from 'lucide-react';
 import { TEAM_COLORS } from '../constants';
@@ -13,6 +13,8 @@ const Dashboard = () => {
   const [loading, setLoading] = useState(true);
   const [showArchived, setShowArchived] = useState(false);
   const [selectedTeamId, setSelectedTeamId] = useState<string>('all');
+  const [selectedPriority, setSelectedPriority] = useState<string>('all');
+  const [selectedStatus, setSelectedStatus] = useState<string>('all');
   
   // Activity Filter State
   const [activityOwnerId, setActivityOwnerId] = useState<string>('me');
@@ -22,6 +24,7 @@ const Dashboard = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [teams, setTeams] = useState<Team[]>([]);
   const [people, setPeople] = useState<Person[]>([]);
+  const [platforms, setPlatforms] = useState<Platform[]>([]);
   
   // Form State
   const [formData, setFormData] = useState<Partial<Initiative>>({
@@ -32,20 +35,23 @@ const Dashboard = () => {
       startDate: '',
       endDate: '',
       progress: 0,
-      tags: []
+      tags: [],
+      platformId: ''
   });
 
   const fetchData = async () => {
-    const [inits, acts, teamsData, peopleData] = await Promise.all([
+    const [inits, acts, teamsData, peopleData, platformsData] = await Promise.all([
       dbService.getInitiatives(),
       dbService.getActivities(),
       dbService.getTeams(),
-      dbService.getPeople()
+      dbService.getPeople(),
+      dbService.getPlatforms()
     ]);
     setInitiatives(inits);
     setActivities(acts);
     setTeams(teamsData.filter(t => t.active));
     setPeople(peopleData);
+    setPlatforms(platformsData);
     setLoading(false);
   };
 
@@ -66,6 +72,7 @@ const Dashboard = () => {
           description: formData.description || '',
           teamId: formData.teamId,
           ownerId: formData.ownerId,
+          platformId: formData.platformId,
           priority: formData.priority as Priority,
           status: formData.status as Status,
           progress: 0,
@@ -79,7 +86,7 @@ const Dashboard = () => {
 
       await dbService.saveInitiative(newInitiative);
       setIsModalOpen(false);
-      setFormData({ title: '', description: '', priority: Priority.P2, status: Status.NotStarted, startDate: '', endDate: '' }); // Reset
+      setFormData({ title: '', description: '', priority: Priority.P2, status: Status.NotStarted, startDate: '', endDate: '', platformId: '' }); // Reset
       fetchData(); // Refresh
   };
 
@@ -124,6 +131,8 @@ const Dashboard = () => {
   const visibleInitiatives = initiatives
     .filter(i => showArchived ? true : !i.archived)
     .filter(i => selectedTeamId === 'all' || i.teamId === selectedTeamId)
+    .filter(i => selectedPriority === 'all' || i.priority === selectedPriority)
+    .filter(i => selectedStatus === 'all' || i.status === selectedStatus)
     .sort((a, b) => {
         // Sort logic: Blocked > P0 > Overdue > EndDate
         if (a.status === Status.Blocked && b.status !== Status.Blocked) return -1;
@@ -215,6 +224,29 @@ const Dashboard = () => {
                         {teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
                     </select>
                 </div>
+                
+                <div className="flex items-center gap-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md px-2 py-1">
+                    <select 
+                        value={selectedPriority} 
+                        onChange={(e) => setSelectedPriority(e.target.value)}
+                        className="bg-transparent border-none text-xs text-slate-700 dark:text-slate-300 focus:ring-0 cursor-pointer py-0 pl-0 pr-6"
+                    >
+                        <option value="all">All Priorities</option>
+                        {Object.values(Priority).map(p => <option key={p} value={p}>{p}</option>)}
+                    </select>
+                </div>
+
+                <div className="flex items-center gap-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md px-2 py-1">
+                    <select 
+                        value={selectedStatus} 
+                        onChange={(e) => setSelectedStatus(e.target.value)}
+                        className="bg-transparent border-none text-xs text-slate-700 dark:text-slate-300 focus:ring-0 cursor-pointer py-0 pl-0 pr-6"
+                    >
+                        <option value="all">All Statuses</option>
+                        {Object.values(Status).map(s => <option key={s} value={s}>{s}</option>)}
+                    </select>
+                </div>
+
                 <Link to="/initiatives" className="text-sm text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 font-medium">View All</Link>
             </div>
           </div>
@@ -233,6 +265,7 @@ const Dashboard = () => {
                         })()
                     }}
                     activities={activities.filter(a => a.initiativeId === initiative.id && (showArchived ? true : !a.archived))}
+                    platforms={platforms}
                     showArchived={showArchived}
                     onArchive={() => handleArchiveInitiative(initiative.id)}
                     onArchiveActivity={handleArchiveActivity}
@@ -334,6 +367,16 @@ const Dashboard = () => {
                     {teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
                 </Select>
                 <Select 
+                    label="Platform" 
+                    value={formData.platformId} 
+                    onChange={e => setFormData({...formData, platformId: e.target.value})}
+                >
+                    <option value="">Select Platform</option>
+                    {platforms.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                </Select>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+                <Select 
                     label="Owner" 
                     value={formData.ownerId} 
                     onChange={e => setFormData({...formData, ownerId: e.target.value})}
@@ -342,8 +385,6 @@ const Dashboard = () => {
                     <option value="">Select Owner</option>
                     {people.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                 </Select>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
                 <Select 
                     label="Priority" 
                     value={formData.priority} 
@@ -351,6 +392,8 @@ const Dashboard = () => {
                 >
                     {Object.values(Priority).map(p => <option key={p} value={p}>{p}</option>)}
                 </Select>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
                 <Select 
                     label="Status" 
                     value={formData.status} 
@@ -386,14 +429,16 @@ const Dashboard = () => {
 const InitiativeRow: React.FC<{ 
     initiative: Initiative, 
     activities: Activity[], 
+    platforms: Platform[],
     onArchive: () => void,
     onArchiveActivity: (id: string) => void,
     showArchived: boolean
-}> = ({ initiative, activities, onArchive, onArchiveActivity, showArchived }) => {
+}> = ({ initiative, activities, platforms, onArchive, onArchiveActivity, showArchived }) => {
     const [expanded, setExpanded] = useState(false);
     const today = new Date();
     const isOverdue = initiative.endDate ? new Date(initiative.endDate) < today : false;
     const isBlocked = initiative.status === Status.Blocked;
+    const platformName = platforms.find(p => p.id === initiative.platformId)?.name;
 
     return (
         <Card className={`hover:shadow-md transition-shadow relative overflow-hidden group ${initiative.archived ? 'opacity-60 border-dashed bg-slate-50' : ''}`}>
@@ -413,6 +458,12 @@ const InitiativeRow: React.FC<{
                         </div>
                         <div className="flex items-center gap-4 text-sm text-slate-500 dark:text-slate-400">
                             <span>{initiative.ownerId === 'me' ? 'You' : initiative.ownerId}</span>
+                            {platformName && (
+                                <>
+                                    <span>•</span>
+                                    <span className="font-medium text-slate-700 dark:text-slate-300">{platformName}</span>
+                                </>
+                            )}
                             <span>•</span>
                             <span>{initiative.endDate ? new Date(initiative.endDate).toLocaleDateString() : 'No Date'}</span>
                             <span className="flex items-center gap-1 text-indigo-600 dark:text-indigo-400 text-xs font-medium">

@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { dbService } from '../services/db';
-import { Initiative, Status, Priority, Team, Person } from '../types';
+import { Initiative, Status, Priority, Team, Person, Platform } from '../types';
 import { Button, StatusBadge, PriorityBadge, Card, ProgressBar, Modal, Input, Select, TextArea } from '../components/ui';
 import { Filter, Search, Plus, Trash2 } from 'lucide-react';
 import { TEAM_COLORS } from '../constants';
@@ -15,6 +15,7 @@ const InitiativesList = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [teams, setTeams] = useState<Team[]>([]);
   const [people, setPeople] = useState<Person[]>([]);
+  const [platforms, setPlatforms] = useState<Platform[]>([]);
 
   // Form State
   const [formData, setFormData] = useState<Partial<Initiative>>({
@@ -25,18 +26,21 @@ const InitiativesList = () => {
       startDate: '',
       endDate: '',
       progress: 0,
-      tags: []
+      tags: [],
+      platformId: ''
   });
 
   const loadData = async () => {
-    const [inits, teamsData, peopleData] = await Promise.all([
+    const [inits, teamsData, peopleData, platformsData] = await Promise.all([
         dbService.getInitiatives(),
         dbService.getTeams(),
-        dbService.getPeople()
+        dbService.getPeople(),
+        dbService.getPlatforms()
     ]);
     setInitiatives(inits);
     setTeams(teamsData.filter(t => t.active));
     setPeople(peopleData);
+    setPlatforms(platformsData);
   };
 
   useEffect(() => {
@@ -56,6 +60,7 @@ const InitiativesList = () => {
           description: formData.description || '',
           teamId: formData.teamId!,
           ownerId: formData.ownerId!,
+          platformId: formData.platformId,
           priority: formData.priority as Priority,
           status: formData.status as Status,
           progress: 0,
@@ -69,7 +74,7 @@ const InitiativesList = () => {
 
       await dbService.saveInitiative(newInitiative);
       setIsModalOpen(false);
-      setFormData({ title: '', description: '', priority: Priority.P2, status: Status.NotStarted, startDate: '', endDate: '' }); // Reset
+      setFormData({ title: '', description: '', priority: Priority.P2, status: Status.NotStarted, startDate: '', endDate: '', platformId: '' }); // Reset
       loadData(); // Refresh
   };
 
@@ -218,6 +223,16 @@ const InitiativesList = () => {
                     {teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
                 </Select>
                 <Select 
+                    label="Platform" 
+                    value={formData.platformId} 
+                    onChange={e => setFormData({...formData, platformId: e.target.value})}
+                >
+                    <option value="">Select Platform</option>
+                    {platforms.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                </Select>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+                <Select 
                     label="Owner" 
                     value={formData.ownerId} 
                     onChange={e => setFormData({...formData, ownerId: e.target.value})}
@@ -226,8 +241,6 @@ const InitiativesList = () => {
                     <option value="">Select Owner</option>
                     {people.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                 </Select>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
                 <Select 
                     label="Priority" 
                     value={formData.priority} 
@@ -235,6 +248,8 @@ const InitiativesList = () => {
                 >
                     {Object.values(Priority).map(p => <option key={p} value={p}>{p}</option>)}
                 </Select>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
                 <Select 
                     label="Status" 
                     value={formData.status} 
@@ -243,7 +258,7 @@ const InitiativesList = () => {
                     {Object.values(Status).map(s => <option key={s} value={s}>{s}</option>)}
                 </Select>
             </div>
-             <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-2 gap-4">
                 <Input 
                     type="date"
                     label="Start Date" 

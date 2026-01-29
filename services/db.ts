@@ -1,8 +1,30 @@
-import { Initiative, Activity, ActivityLog, Team, Person } from '../types';
+import { Initiative, Activity, ActivityLog, Team, Person, CapacityAssignment, Platform } from '../types';
 
 const API_URL = 'http://localhost:3001/api';
 
 class DatabaseService {
+  // --- Capacity Assignments ---
+
+  async getCapacityAssignments(year?: number): Promise<CapacityAssignment[]> {
+    const url = year ? `${API_URL}/capacity?year=${year}` : `${API_URL}/capacity`;
+    const res = await fetch(url);
+    return res.json();
+  }
+
+  async saveCapacityAssignment(assignment: CapacityAssignment): Promise<void> {
+    await fetch(`${API_URL}/capacity`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(assignment)
+    });
+  }
+
+  async deleteCapacityAssignment(id: string): Promise<void> {
+    await fetch(`${API_URL}/capacity/${id}`, {
+      method: 'DELETE'
+    });
+  }
+
   // --- Initiatives ---
 
   async getInitiatives(): Promise<Initiative[]> {
@@ -101,6 +123,27 @@ class DatabaseService {
 
   async deletePerson(id: string): Promise<void> {
     await fetch(`${API_URL}/people/${id}`, {
+      method: 'DELETE'
+    });
+  }
+
+  // --- Platforms ---
+
+  async getPlatforms(): Promise<Platform[]> {
+    const res = await fetch(`${API_URL}/platforms`);
+    return res.json();
+  }
+
+  async savePlatform(platform: Platform): Promise<void> {
+    await fetch(`${API_URL}/platforms`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(platform)
+    });
+  }
+
+  async deletePlatform(id: string): Promise<void> {
+    await fetch(`${API_URL}/platforms/${id}`, {
       method: 'DELETE'
     });
   }
