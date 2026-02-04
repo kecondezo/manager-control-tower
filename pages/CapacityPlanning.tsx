@@ -2,7 +2,10 @@ import React, { useEffect, useState } from 'react';
 import { dbService } from '../services/db';
 import { Initiative, Person, CapacityAssignment, Team } from '../types';
 import { Card, Button, Modal, Select, Input } from '../components/ui';
-import { Users, Calendar, Plus, Trash2, Save, AlertCircle } from 'lucide-react';
+import { Users, Calendar, Plus, Trash2, Save, AlertCircle, Edit2, Copy, Clipboard, FileText, FileSpreadsheet } from 'lucide-react';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
+import * as XLSX from 'xlsx';
 
 const CapacityPlanning = () => {
     const [people, setPeople] = useState<Person[]>([]);
@@ -13,13 +16,16 @@ const CapacityPlanning = () => {
     const [loading, setLoading] = useState(true);
     const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
     
-    // Modal state for adding assignment
+    // Modal state for adding/editing assignment
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [selectedCell, setSelectedCell] = useState<{personId: string, month: number} | null>(null);
+    const [editingAssignmentId, setEditingAssignmentId] = useState<string | null>(null);
     const [newAssignment, setNewAssignment] = useState({
         initiativeId: '',
         percentage: 100
     });
+
+    const [copiedAssignment, setCopiedAssignment] = useState<Partial<CapacityAssignment> | null>(null);
 
     const fetchData = async () => {
         setLoading(true);
@@ -47,7 +53,15 @@ const CapacityPlanning = () => {
 
     const handleOpenCell = (personId: string, month: number) => {
         setSelectedCell({ personId, month });
+        setEditingAssignmentId(null);
         setNewAssignment({ initiativeId: '', percentage: 100 });
+        setIsModalOpen(true);
+    };
+
+    const handleEditAssignment = (assignment: CapacityAssignment) => {
+        setSelectedCell({ personId: assignment.personId, month: assignment.month });
+        setEditingAssignmentId(assignment.id);
+        setNewAssignment({ initiativeId: assignment.initiativeId, percentage: assignment.percentage });
         setIsModalOpen(true);
     };
 
@@ -55,7 +69,7 @@ const CapacityPlanning = () => {
         if (!selectedCell || !newAssignment.initiativeId) return;
 
         const assignment: CapacityAssignment = {
-            id: crypto.randomUUID(),
+            id: editingAssignmentId || crypto.randomUUID(),
             personId: selectedCell.personId,
             initiativeId: newAssignment.initiativeId,
             year: selectedYear,
@@ -76,6 +90,94 @@ const CapacityPlanning = () => {
         }
     };
 
+    const handleCopyAssignment = (assignment: CapacityAssignment) => {
+        setCopiedAssignment({
+            initiativeId: assignment.initiativeId,
+            percentage: assignment.percentage
+        });
+    };
+
+    const handlePasteAssignment = async (personId: string, month: number) => {
+        if (!copiedAssignment) return;
+
+        const assignment: CapacityAssignment = {
+            id: crypto.randomUUID(),
+            personId,
+            initiativeId: copiedAssignment.initiativeId!,
+            year: selectedYear,
+            month,
+            percentage: copiedAssignment.percentage!,
+            updatedAt: new Date().toISOString()
+        };
+
+        await dbService.saveCapacityAssignment(assignment);
+        fetchData();
+    };
+
+    const exportToPDF = () => {
+        const doc = new jsPDF({
+            orientation: 'landscape',
+            unit: 'mm',
+            format: 'a4'
+        });
+
+        const tableColumn = ["Persona", ...months, "Total"];
+        const tableRows: any[] = [];
+
+        filteredPeople.forEach(person => {
+            const rowData = [person.name];
+            months.forEach((_, idx) => {
+                const monthNum = idx + 1;
+                const cellAssignments = getAssignmentsForCell(person.id, monthNum);
+                const total = getTotalPercentage(person.id, monthNum);
+                
+                const assignmentNames = cellAssignments.map(a => {
+                    const init = initiatives.find(i => i.id === a.initiativeId);
+                    return `${init?.title || 'Unknown'} (${a.percentage}%)`;
+                }).join('\n');
+                
+                rowData.push(assignmentNames + (total > 0 ? `\nTotal: ${total}%` : ''));
+            });
+            tableRows.push(rowData);
+        });
+
+        autoTable(doc, {
+            head: [tableColumn],
+            body: tableRows,
+            startY: 20,
+            styles: { fontSize: 7, cellPadding: 1 },
+            headStyles: { fillColor: [79, 70, 229] },
+            theme: 'grid'
+        });
+
+        doc.text(`Capacity Planning - ${selectedYear}`, 14, 15);
+        doc.save(`Capacity_Planning_${selectedYear}.pdf`);
+    };
+
+    const exportToExcel = () => {
+        const data = filteredPeople.map(person => {
+            const row: any = { "Persona": person.name };
+            months.forEach((month, idx) => {
+                const monthNum = idx + 1;
+                const cellAssignments = getAssignmentsForCell(person.id, monthNum);
+                const total = getTotalPercentage(person.id, monthNum);
+                
+                const assignmentNames = cellAssignments.map(a => {
+                    const init = initiatives.find(i => i.id === a.initiativeId);
+                    return `${init?.title || 'Unknown'} (${a.percentage}%)`;
+                }).join(', ');
+                
+                row[month] = assignmentNames + (total > 0 ? ` | Total: ${total}%` : '');
+            });
+            return row;
+        });
+
+        const ws = XLSX.utils.json_to_sheet(data);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Capacity Planning");
+        XLSX.writeFile(wb, `Capacity_Planning_${selectedYear}.xlsx`);
+    };
+
     const getAssignmentsForCell = (personId: string, month: number) => {
         return assignments.filter(a => a.personId === personId && a.month === month);
     };
@@ -87,6 +189,11 @@ const CapacityPlanning = () => {
     const filteredPeople = people.filter(person => {
         if (selectedTeamId === 'all') return true;
         return (person.teamIds || []).includes(selectedTeamId);
+    });
+
+    const filteredInitiatives = initiatives.filter(init => {
+        if (selectedTeamId === 'all') return true;
+        return init.teamId === selectedTeamId;
     });
 
     if (loading) return <div className="p-8 text-slate-500">Cargando planificación...</div>;
@@ -102,6 +209,16 @@ const CapacityPlanning = () => {
                     <p className="text-slate-500 dark:text-slate-400">Planificación de dedicación del equipo por iniciativa</p>
                 </div>
                 <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-2">
+                        <Button onClick={exportToPDF} variant="secondary" className="flex items-center gap-2">
+                            <FileText className="w-4 h-4" />
+                            PDF
+                        </Button>
+                        <Button onClick={exportToExcel} variant="secondary" className="flex items-center gap-2">
+                            <FileSpreadsheet className="w-4 h-4" />
+                            Excel
+                        </Button>
+                    </div>
                     <div className="flex items-center gap-2 bg-white dark:bg-slate-800 p-2 rounded-lg border border-slate-200 dark:border-slate-700">
                         <select 
                             value={selectedTeamId} 
@@ -132,13 +249,13 @@ const CapacityPlanning = () => {
             <Card className="overflow-hidden">
                 <div className="overflow-x-auto">
                     <table className="w-full border-collapse">
-                        <thead>
+                        <thead className="sticky top-0 z-20 shadow-sm">
                             <tr className="bg-slate-50 dark:bg-slate-900/50">
-                                <th className="p-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider border-b border-slate-200 dark:border-slate-700 sticky left-0 bg-slate-50 dark:bg-slate-900 z-10 w-48">
+                                <th className="p-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider border-b border-slate-200 dark:border-slate-700 sticky left-0 bg-slate-50 dark:bg-slate-900 z-30 w-48">
                                     Persona
                                 </th>
                                 {months.map((month, idx) => (
-                                    <th key={month} className="p-4 text-center text-xs font-semibold text-slate-500 uppercase tracking-wider border-b border-slate-200 dark:border-slate-700 min-w-[120px]">
+                                    <th key={month} className="p-4 text-center text-xs font-semibold text-slate-500 uppercase tracking-wider border-b border-slate-200 dark:border-slate-700 min-w-[120px] bg-slate-50 dark:bg-slate-900">
                                         {month}
                                     </th>
                                 ))}
@@ -172,22 +289,51 @@ const CapacityPlanning = () => {
                                                                 </span>
                                                                 <div className="flex justify-between items-center mt-1">
                                                                     <span className="text-indigo-600 dark:text-indigo-400 font-medium">{a.percentage}%</span>
-                                                                    <button 
-                                                                        onClick={() => handleDeleteAssignment(a.id)}
-                                                                        className="opacity-0 group-hover/item:opacity-100 text-rose-500 hover:text-rose-700 transition-opacity"
-                                                                    >
-                                                                        <Trash2 className="w-3 h-3" />
-                                                                    </button>
+                                                                    <div className="flex gap-1 opacity-0 group-hover/item:opacity-100 transition-opacity">
+                                                                        <button 
+                                                                            onClick={() => handleCopyAssignment(a)}
+                                                                            className="text-slate-400 hover:text-indigo-600"
+                                                                            title="Copiar"
+                                                                        >
+                                                                            <Copy className="w-3 h-3" />
+                                                                        </button>
+                                                                        <button 
+                                                                            onClick={() => handleEditAssignment(a)}
+                                                                            className="text-slate-400 hover:text-indigo-600"
+                                                                            title="Editar"
+                                                                        >
+                                                                            <Edit2 className="w-3 h-3" />
+                                                                        </button>
+                                                                        <button 
+                                                                            onClick={() => handleDeleteAssignment(a.id)}
+                                                                            className="text-rose-500 hover:text-rose-700"
+                                                                            title="Eliminar"
+                                                                        >
+                                                                            <Trash2 className="w-3 h-3" />
+                                                                        </button>
+                                                                    </div>
                                                                 </div>
                                                             </div>
                                                         );
                                                     })}
-                                                    <button 
-                                                        onClick={() => handleOpenCell(person.id, monthNum)}
-                                                        className="w-full py-1 border border-dashed border-slate-300 dark:border-slate-600 rounded text-slate-400 hover:text-indigo-600 hover:border-indigo-400 dark:hover:text-indigo-400 dark:hover:border-indigo-500 transition-all opacity-0 group-hover:opacity-100"
-                                                    >
-                                                        <Plus className="w-4 h-4 mx-auto" />
-                                                    </button>
+                                                    <div className="flex gap-1">
+                                                        <button 
+                                                            onClick={() => handleOpenCell(person.id, monthNum)}
+                                                            className="flex-1 py-1 border border-dashed border-slate-300 dark:border-slate-600 rounded text-slate-400 hover:text-indigo-600 hover:border-indigo-400 dark:hover:text-indigo-400 dark:hover:border-indigo-500 transition-all opacity-0 group-hover:opacity-100"
+                                                            title="Añadir asignación"
+                                                        >
+                                                            <Plus className="w-4 h-4 mx-auto" />
+                                                        </button>
+                                                        {copiedAssignment && (
+                                                            <button 
+                                                                onClick={() => handlePasteAssignment(person.id, monthNum)}
+                                                                className="flex-1 py-1 border border-dashed border-indigo-300 dark:border-indigo-600 rounded text-indigo-400 hover:text-indigo-600 hover:border-indigo-400 transition-all opacity-0 group-hover:opacity-100"
+                                                                title="Pegar asignación"
+                                                            >
+                                                                <Clipboard className="w-4 h-4 mx-auto" />
+                                                            </button>
+                                                        )}
+                                                    </div>
                                                 </div>
                                                 {total > 0 && (
                                                     <div className={`mt-2 text-[10px] font-bold text-center py-0.5 rounded ${
@@ -218,7 +364,7 @@ const CapacityPlanning = () => {
             <Modal 
                 isOpen={isModalOpen} 
                 onClose={() => setIsModalOpen(false)} 
-                title={`Asignar Iniciativa - ${selectedCell ? months[selectedCell.month - 1] : ''}`}
+                title={`${editingAssignmentId ? 'Editar' : 'Asignar'} Iniciativa - ${selectedCell ? months[selectedCell.month - 1] : ''}`}
             >
                 <div className="space-y-4">
                     <Select 
@@ -227,7 +373,7 @@ const CapacityPlanning = () => {
                         onChange={(e) => setNewAssignment({ ...newAssignment, initiativeId: e.target.value })}
                     >
                         <option value="">Seleccionar iniciativa...</option>
-                        {initiatives.map(i => (
+                        {filteredInitiatives.map(i => (
                             <option key={i.id} value={i.id}>{i.title}</option>
                         ))}
                     </Select>
@@ -242,7 +388,7 @@ const CapacityPlanning = () => {
                     <div className="pt-4 flex justify-end gap-2">
                         <Button variant="secondary" onClick={() => setIsModalOpen(false)}>Cancelar</Button>
                         <Button onClick={handleAddAssignment} disabled={!newAssignment.initiativeId}>
-                            Asignar
+                            {editingAssignmentId ? 'Guardar Cambios' : 'Asignar'}
                         </Button>
                     </div>
                 </div>
