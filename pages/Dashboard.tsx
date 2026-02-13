@@ -13,6 +13,7 @@ const Dashboard = () => {
   const [loading, setLoading] = useState(true);
   const [showArchived, setShowArchived] = useState(false);
   const [selectedTeamId, setSelectedTeamId] = useState<string>('all');
+  const [selectedPlatformId, setSelectedPlatformId] = useState<string>('all');
   const [selectedPriority, setSelectedPriority] = useState<string>('all');
   const [selectedStatus, setSelectedStatus] = useState<string>('all');
   
@@ -131,6 +132,7 @@ const Dashboard = () => {
   const visibleInitiatives = initiatives
     .filter(i => showArchived ? true : !i.archived)
     .filter(i => selectedTeamId === 'all' || i.teamId === selectedTeamId)
+    .filter(i => selectedPlatformId === 'all' || i.platformId === selectedPlatformId)
     .filter(i => selectedPriority === 'all' || i.priority === selectedPriority)
     .filter(i => selectedStatus === 'all' || i.status === selectedStatus)
     .sort((a, b) => {
@@ -222,6 +224,17 @@ const Dashboard = () => {
                     >
                         <option value="all">All Teams</option>
                         {teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                    </select>
+                </div>
+
+                <div className="flex items-center gap-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md px-2 py-1">
+                    <select 
+                        value={selectedPlatformId} 
+                        onChange={(e) => setSelectedPlatformId(e.target.value)}
+                        className="bg-transparent border-none text-xs text-slate-700 dark:text-slate-300 focus:ring-0 cursor-pointer py-0 pl-0 pr-6"
+                    >
+                        <option value="all">All Platforms</option>
+                        {platforms.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                     </select>
                 </div>
                 

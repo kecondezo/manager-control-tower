@@ -9,6 +9,7 @@ import { TEAM_COLORS } from '../constants';
 const InitiativesList = () => {
   const [initiatives, setInitiatives] = useState<Initiative[]>([]);
   const [filterArchived, setFilterArchived] = useState(false);
+  const [selectedPlatformId, setSelectedPlatformId] = useState<string>('all');
   const [searchTerm, setSearchTerm] = useState('');
 
   // Modal State
@@ -87,6 +88,7 @@ const InitiativesList = () => {
 
   const filtered = initiatives.filter(i => {
     if (i.archived !== filterArchived) return false;
+    if (selectedPlatformId !== 'all' && i.platformId !== selectedPlatformId) return false;
     if (searchTerm && !i.title.toLowerCase().includes(searchTerm.toLowerCase())) return false;
     return true;
   });
@@ -112,6 +114,16 @@ const InitiativesList = () => {
                 onChange={e => setSearchTerm(e.target.value)}
                 className="w-full pl-9 pr-4 py-2 text-sm border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none text-slate-900 dark:text-white"
             />
+         </div>
+         <div className="min-w-[150px]">
+            <select 
+                value={selectedPlatformId} 
+                onChange={(e) => setSelectedPlatformId(e.target.value)}
+                className="w-full px-3 py-2 text-sm border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none text-slate-700 dark:text-slate-200"
+            >
+                <option value="all">All Platforms</option>
+                {platforms.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+            </select>
          </div>
          <div className="flex items-center gap-2 border-l border-slate-200 dark:border-slate-700 pl-4">
              <label className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400 cursor-pointer select-none">
